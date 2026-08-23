@@ -1,0 +1,15 @@
+{
+  "name": "herdr-project-tabs",
+  "version": "0.1.0",
+  "description": "Herdr plugin for a shared default project tab layout",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check index.mjs",
+    "test": "node tests/smoke.mjs",
+    "verify": "npm run check && npm test"
+  }
+}

@@ -1,0 +1,19 @@
+id = "anatide.project-tabs"
+name = "Project Tabs"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Create the shared default tab set for every project workspace."
+platforms = ["macos", "linux", "windows"]
+
+[[startup]]
+command = ["node", "index.mjs"]
+
+[[actions]]
+id = "apply"
+title = "Apply project tabs"
+contexts = ["workspace"]
+command = ["node", "index.mjs"]
+
+[[events]]
+on = "workspace.created"
+command = ["node", "index.mjs"]
