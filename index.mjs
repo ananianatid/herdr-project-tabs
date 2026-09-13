@@ -147,8 +147,12 @@ function paneTabId(pane) {
   return pane.tab_id ?? pane.tabId;
 }
 
+function normalizedTabLabel(label) {
+  return typeof label === "string" ? label.trim().toLowerCase() : "";
+}
+
 function applyWorkspace(workspaceId) {
-  const tabs = call(["tab", "list", "--workspace", workspaceId]).tabs ?? [];
+  let tabs = call(["tab", "list", "--workspace", workspaceId]).tabs ?? [];
   const panes = call(["pane", "list", "--workspace", workspaceId]).panes ?? [];
   const labels = new Set(tabs.map((tab) => tab.label));
   const projectCwd =
@@ -156,6 +160,21 @@ function applyWorkspace(workspaceId) {
     panes.find((pane) => pane.cwd)?.cwd;
 
   if (!projectCwd) return 0;
+
+  let mainTab = tabs.find((tab) => tab.label === "main");
+  if (!mainTab) {
+    const placeholder = tabs.find(
+      (tab) => normalizedTabLabel(tab.label) === "tab 1",
+    );
+    const placeholderId = placeholder && tabId(placeholder);
+    if (placeholderId) {
+      call(["tab", "rename", placeholderId, "main"]);
+      labels.delete(placeholder.label);
+      placeholder.label = "main";
+      labels.add("main");
+      mainTab = placeholder;
+    }
+  }
 
   let created = 0;
   const createdLabels = new Set();
@@ -177,9 +196,20 @@ function applyWorkspace(workspaceId) {
     created += 1;
   }
 
+  if (created > 0) {
+    tabs = call(["tab", "list", "--workspace", workspaceId]).tabs ?? [];
+    mainTab = tabs.find((tab) => tab.label === "main") ?? mainTab;
+  }
+
+  const mainTabId = mainTab && tabId(mainTab);
+  if (!mainTabId) {
+    throw new Error(`could not find the main tab in workspace ${workspaceId}`);
+  }
+  call(["tab", "focus", mainTabId]);
+
   if (createdLabels.size > 0 && isWorkspaceCreatedEvent()) {
     const settings = loadSettings();
-    const updatedTabs = call(["tab", "list", "--workspace", workspaceId]).tabs ?? [];
+    const updatedTabs = tabs;
     const updatedPanes = call(["pane", "list", "--workspace", workspaceId]).panes ?? [];
 
     for (const target of TOOL_TARGETS) {

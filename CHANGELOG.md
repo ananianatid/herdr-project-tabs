@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Normalize Herdr's initial `tab 1` placeholder to the focused `main` tab and focus `main` after applying the layout.
 - Add a `remote` recommendation tab for manual SSH and deployment work.
 - Optionally launch installed Yazi and Lazygit instances in new workspaces through separate opt-in settings.
 

@@ -25,6 +25,7 @@ writeFileSync(
         foreground_cwd: "/tmp/project",
       },
     ],
+    active_tab_id: "w1:t2",
     runs: [],
   }),
 );
@@ -61,6 +62,26 @@ if (command === "workspace list") {
   });
   writeFileSync(statePath, JSON.stringify(state));
   reply({ type: "tab_created" });
+} else if (command === "tab rename") {
+  const tabId = args[2];
+  const label = args.slice(3).join(" ");
+  const tab = state.tabs.find((candidate) => candidate.tab_id === tabId);
+  if (!tab) {
+    process.stderr.write("unknown tab: " + tabId + "\\n");
+    process.exit(1);
+  }
+  tab.label = label;
+  writeFileSync(statePath, JSON.stringify(state));
+  reply({ type: "tab_renamed" });
+} else if (command === "tab focus") {
+  const tabId = args[2];
+  if (!state.tabs.some((tab) => tab.tab_id === tabId)) {
+    process.stderr.write("unknown tab: " + tabId + "\\n");
+    process.exit(1);
+  }
+  state.active_tab_id = tabId;
+  writeFileSync(statePath, JSON.stringify(state));
+  reply({ type: "tab_focused" });
 } else if (command === "pane run") {
   state.runs.push({ pane_id: args[2], command: args[3] });
   writeFileSync(statePath, JSON.stringify(state));
@@ -73,13 +94,14 @@ if (command === "workspace list") {
 );
 chmodSync(fakeHerdrPath, 0o755);
 
-function runPlugin() {
+function runPlugin(testStatePath = statePath, extraEnv = {}) {
   return spawnSync(process.execPath, [join(repoRoot, "index.mjs")], {
     encoding: "utf8",
     env: {
       ...process.env,
       HERDR_BIN_PATH: fakeHerdrPath,
-      FAKE_HERDR_STATE: statePath,
+      FAKE_HERDR_STATE: testStatePath,
+      ...extraEnv,
     },
   });
 }
@@ -100,10 +122,61 @@ assert.deepEqual(stateAfterFirstRun.tabs.map((tab) => tab.label), [
   "terminal",
   "remote",
 ]);
+assert.equal(stateAfterFirstRun.active_tab_id, "w1:t1");
 
 const secondRun = runPlugin();
 assert.equal(secondRun.status, 0, secondRun.stderr);
 assert.match(secondRun.stdout, /created 0 tab\(s\)/);
+
+const placeholderStatePath = join(tempRoot, "placeholder-state.json");
+writeFileSync(
+  placeholderStatePath,
+  JSON.stringify({
+    tabs: [
+      { label: "tab 1", tab_id: "w1:t1" },
+      { label: "custom", tab_id: "w1:t2" },
+    ],
+    panes: [
+      {
+        pane_id: "w1:p1",
+        tab_id: "w1:t1",
+        cwd: "/tmp/project",
+        foreground_cwd: "/tmp/project",
+      },
+    ],
+    active_tab_id: "w1:t2",
+    runs: [],
+  }),
+);
+
+const placeholderRun = runPlugin(placeholderStatePath);
+assert.equal(placeholderRun.status, 0, placeholderRun.stderr);
+const placeholderState = JSON.parse(readFileSync(placeholderStatePath, "utf8"));
+assert.deepEqual(placeholderState.tabs.map((tab) => tab.label), [
+  "main",
+  "custom",
+  "second",
+  "debug",
+  "run",
+  "build",
+  "explore",
+  "git",
+  "terminal",
+  "remote",
+]);
+assert.equal(placeholderState.active_tab_id, "w1:t1");
+
+const placeholderSecondRun = runPlugin(placeholderStatePath);
+assert.equal(placeholderSecondRun.status, 0, placeholderSecondRun.stderr);
+assert.match(placeholderSecondRun.stdout, /created 0 tab\(s\)/);
+const placeholderStateAfterSecondRun = JSON.parse(
+  readFileSync(placeholderStatePath, "utf8"),
+);
+assert.equal(
+  placeholderStateAfterSecondRun.tabs.filter((tab) => tab.label === "main").length,
+  1,
+);
+assert.equal(placeholderStateAfterSecondRun.active_tab_id, "w1:t1");
 
 const eventStatePath = join(tempRoot, "event-state.json");
 const configDir = join(tempRoot, "config");
