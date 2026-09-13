@@ -4,9 +4,31 @@ Herdr plugin that keeps a shared default tab set in every project workspace.
 
 The default tabs are:
 
-`main` · `second` · `debug` · `run` · `build` · `explore` · `git` · `terminal`
+`main` · `second` · `debug` · `run` · `build` · `explore` · `git` · `terminal` · `remote`
 
-The plugin is deliberately additive: it creates missing tabs and does not remove, rename, or reorder existing tabs.
+The plugin is deliberately additive: it creates missing tabs and does not remove or reorder existing tabs. When Herdr provides the generic `tab 1` placeholder and no `main` tab exists yet, that placeholder is renamed to `main`. After every application, the `main` tab is focused. Existing project-specific tabs remain untouched.
+
+`remote` is a regular terminal tab reserved for manually connecting to a deployment server and running deployment commands. The plugin does not open SSH connections or deploy anything automatically.
+
+## Optional tool launch
+
+The `explore` and `git` tabs can optionally start Yazi and Lazygit when a new workspace is created. This is disabled by default and each tool has its own setting.
+
+Find the plugin configuration directory:
+
+```sh
+herdr plugin config-dir anatide.project-tabs
+```
+
+Create a `settings.conf` file in that directory:
+
+```conf
+# Both settings default to false when omitted.
+AUTO_LAUNCH_YAZI=true
+AUTO_LAUNCH_LAZYGIT=false
+```
+
+The plugin checks whether each enabled command is installed and skips it when it is unavailable. The tools are launched only in the `explore` and `git` tabs created for a new workspace; startup and manual `apply` never relaunch them.
 
 ## Requirements
 
@@ -18,7 +40,7 @@ The plugin is deliberately additive: it creates missing tabs and does not remove
 After publishing this repository:
 
 ```sh
-herdr plugin install OWNER/herdr-project-tabs --ref v0.1.0
+herdr plugin install ananianatid/herdr-project-tabs --ref v0.1.0
 ```
 
 The plugin applies the default layout when Herdr starts and whenever a new workspace is created. You can also run it manually:
