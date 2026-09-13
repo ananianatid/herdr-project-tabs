@@ -6,7 +6,7 @@ The default tabs are:
 
 `main` · `second` · `debug` · `run` · `build` · `explore` · `git` · `terminal` · `remote`
 
-The plugin is deliberately additive: it creates missing tabs and does not remove or reorder existing tabs. On a fresh workspace, when Herdr provides the generic `tab 1` placeholder and no `main` tab exists yet, that placeholder is renamed to `main` and focused so the default tab layout starts in the expected tab.
+The plugin is deliberately additive: it creates missing tabs and does not remove or reorder existing tabs. When Herdr provides the generic `tab 1` placeholder and no `main` tab exists yet, that placeholder is renamed to `main`. After every application, the `main` tab is focused. Existing project-specific tabs remain untouched.
 
 `remote` is a regular terminal tab reserved for manually connecting to a deployment server and running deployment commands. The plugin does not open SSH connections or deploy anything automatically.
 
@@ -40,7 +40,7 @@ The plugin checks whether each enabled command is installed and skips it when it
 After publishing this repository:
 
 ```sh
-herdr plugin install OWNER/herdr-project-tabs --ref v0.1.0
+herdr plugin install ananianatid/herdr-project-tabs --ref v0.1.0
 ```
 
 The plugin applies the default layout when Herdr starts and whenever a new workspace is created. You can also run it manually:
