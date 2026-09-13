@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -13,7 +13,19 @@ const fakeHerdrPath = join(tempRoot, "herdr-fake.mjs");
 writeFileSync(
   statePath,
   JSON.stringify({
-    tabs: [{ label: "main" }, { label: "second" }],
+    tabs: [
+      { label: "main", tab_id: "w1:t1" },
+      { label: "second", tab_id: "w1:t2" },
+    ],
+    panes: [
+      {
+        pane_id: "w1:p1",
+        tab_id: "w1:t1",
+        cwd: "/tmp/project",
+        foreground_cwd: "/tmp/project",
+      },
+    ],
+    runs: [],
   }),
 );
 
@@ -34,14 +46,25 @@ function reply(result) {
 if (command === "workspace list") {
   reply({ workspaces: [{ workspace_id: "w1" }] });
 } else if (command === "tab list") {
-  reply({ tabs: state.tabs.map((tab, index) => ({ ...tab, tab_id: "w1:t" + (index + 1) })) });
+  reply({ tabs: state.tabs });
 } else if (command === "pane list") {
-  reply({ panes: [{ cwd: "/tmp/project", foreground_cwd: "/tmp/project" }] });
+  reply({ panes: state.panes });
 } else if (command === "tab create") {
   const label = args[args.indexOf("--label") + 1];
-  state.tabs.push({ label });
+  const tabId = "w1:t" + (state.tabs.length + 1);
+  state.tabs.push({ label, tab_id: tabId });
+  state.panes.push({
+    pane_id: "w1:p" + (state.panes.length + 1),
+    tab_id: tabId,
+    cwd: "/tmp/project",
+    foreground_cwd: "/tmp/project",
+  });
   writeFileSync(statePath, JSON.stringify(state));
   reply({ type: "tab_created" });
+} else if (command === "pane run") {
+  state.runs.push({ pane_id: args[2], command: args[3] });
+  writeFileSync(statePath, JSON.stringify(state));
+  reply({ type: "command_started" });
 } else {
   process.stderr.write("unexpected command: " + args.join(" ") + "\\n");
   process.exit(1);
@@ -63,7 +86,7 @@ function runPlugin() {
 
 const firstRun = runPlugin();
 assert.equal(firstRun.status, 0, firstRun.stderr);
-assert.match(firstRun.stdout, /created 6 tab\(s\)/);
+assert.match(firstRun.stdout, /created 7 tab\(s\)/);
 
 const stateAfterFirstRun = JSON.parse(readFileSync(statePath, "utf8"));
 assert.deepEqual(stateAfterFirstRun.tabs.map((tab) => tab.label), [
@@ -75,10 +98,91 @@ assert.deepEqual(stateAfterFirstRun.tabs.map((tab) => tab.label), [
   "explore",
   "git",
   "terminal",
+  "remote",
 ]);
 
 const secondRun = runPlugin();
 assert.equal(secondRun.status, 0, secondRun.stderr);
 assert.match(secondRun.stdout, /created 0 tab\(s\)/);
+
+const eventStatePath = join(tempRoot, "event-state.json");
+const configDir = join(tempRoot, "config");
+const binDir = join(tempRoot, "bin");
+const testPath = [binDir, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter);
+mkdirSync(configDir);
+mkdirSync(binDir);
+writeFileSync(
+  eventStatePath,
+  JSON.stringify({
+    tabs: [{ label: "main", tab_id: "w1:t1" }],
+    panes: [
+      {
+        pane_id: "w1:p1",
+        tab_id: "w1:t1",
+        cwd: "/tmp/project",
+        foreground_cwd: "/tmp/project",
+      },
+    ],
+    runs: [],
+  }),
+);
+writeFileSync(
+  join(configDir, "settings.conf"),
+  "AUTO_LAUNCH_YAZI=true\nAUTO_LAUNCH_LAZYGIT=true\n",
+);
+for (const tool of ["yazi", "lazygit"]) {
+  writeFileSync(join(binDir, tool), "#!/bin/sh\nexit 0\n");
+  chmodSync(join(binDir, tool), 0o755);
+}
+
+const eventRun = spawnSync(process.execPath, [join(repoRoot, "index.mjs")], {
+  encoding: "utf8",
+  env: {
+    ...process.env,
+    HERDR_BIN_PATH: fakeHerdrPath,
+    FAKE_HERDR_STATE: eventStatePath,
+    HERDR_PLUGIN_CONFIG_DIR: configDir,
+    HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "workspace.created", workspace_id: "w1" }),
+    PATH: testPath,
+  },
+});
+assert.equal(eventRun.status, 0, eventRun.stderr);
+assert.match(eventRun.stdout, /created 8 tab\(s\)/);
+
+const eventState = JSON.parse(readFileSync(eventStatePath, "utf8"));
+assert.deepEqual(eventState.runs, [
+  { pane_id: "w1:p6", command: "yazi" },
+  { pane_id: "w1:p7", command: "lazygit" },
+]);
+
+const noAutoStatePath = join(tempRoot, "no-auto-state.json");
+writeFileSync(
+  noAutoStatePath,
+  JSON.stringify({
+    tabs: [{ label: "main", tab_id: "w1:t1" }],
+    panes: [
+      {
+        pane_id: "w1:p1",
+        tab_id: "w1:t1",
+        cwd: "/tmp/project",
+        foreground_cwd: "/tmp/project",
+      },
+    ],
+    runs: [],
+  }),
+);
+const noAutoRun = spawnSync(process.execPath, [join(repoRoot, "index.mjs")], {
+  encoding: "utf8",
+  env: {
+    ...process.env,
+    HERDR_BIN_PATH: fakeHerdrPath,
+    FAKE_HERDR_STATE: noAutoStatePath,
+    HERDR_PLUGIN_CONFIG_DIR: join(tempRoot, "missing-config"),
+    HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: "workspace.created", workspace_id: "w1" }),
+    PATH: testPath,
+  },
+});
+assert.equal(noAutoRun.status, 0, noAutoRun.stderr);
+assert.deepEqual(JSON.parse(readFileSync(noAutoStatePath, "utf8")).runs, []);
 
 console.log("smoke test passed");
